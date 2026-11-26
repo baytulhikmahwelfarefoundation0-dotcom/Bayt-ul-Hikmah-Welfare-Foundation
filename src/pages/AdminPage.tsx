@@ -1,4 +1,4 @@
-import { useRef, useState, type ChangeEvent, type FormEvent } from 'react';
+import { useRef, useState, useEffect, type ChangeEvent, type FormEvent } from 'react';
 import { Link } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -19,6 +19,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
+import { supabase } from '../lib/supabase';
 import { useFoundation, type ActivityFormInput } from '../context/FoundationContext';
 import type { ActivityItem, SocialIconKey, SocialLinkItem } from '../data/foundationData';
 import { ActivityIcon } from '../components/ActivityIcon';
@@ -88,32 +89,27 @@ function compressImageFile(file: File): Promise<string> {
   });
 }
 
-// ─── Admin credentials (change here to update the password) ──────────────────
-const ADMIN_USERNAME = 'admin';
-const ADMIN_PASSWORD = 'baytulhikmah@2024';
-const SESSION_KEY = 'bth_admin_auth';
-
-// ─── Login screen component ───────────────────────────────────────────────────
+// ─── Login screen component (uses Supabase Auth) ──────────────────────────────
 function AdminLoginScreen({ onSuccess }: { onSuccess: () => void }) {
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleLogin = (e: FormEvent) => {
+  const handleLogin = async (e: FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
-    // Simulate a tiny delay so it feels intentional
-    setTimeout(() => {
-      if (username.trim() === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
-        sessionStorage.setItem(SESSION_KEY, '1');
-        onSuccess();
-      } else {
-        setError('Invalid username or password. Please try again.');
-      }
-      setLoading(false);
-    }, 400);
+    const { error: authError } = await supabase.auth.signInWithPassword({
+      email: email.trim(),
+      password,
+    });
+    if (authError) {
+      setError(authError.message ?? 'Invalid email or password.');
+    } else {
+      onSuccess();
+    }
+    setLoading(false);
   };
 
   return (
@@ -135,15 +131,15 @@ function AdminLoginScreen({ onSuccess }: { onSuccess: () => void }) {
         >
           <div>
             <label className="block text-sm font-semibold text-[var(--text-body)] mb-1.5">
-              Username
+              Email
             </label>
             <input
-              type="text"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               required
-              autoComplete="username"
-              placeholder="Enter username"
+              autoComplete="email"
+              placeholder="admin@example.com"
               className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-transparent transition"
             />
           </div>
@@ -194,15 +190,35 @@ function AdminLoginScreen({ onSuccess }: { onSuccess: () => void }) {
 }
 
 export function AdminPage() {
-  // ─── Auth gate ──────────────────────────────────────────────────────────────
-  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(
-    () => sessionStorage.getItem(SESSION_KEY) === '1'
-  );
+  // ─── Auth gate (Supabase session) ───────────────────────────────────────────
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [authChecked, setAuthChecked] = useState(false);
 
-  const handleLogout = () => {
-    sessionStorage.removeItem(SESSION_KEY);
+  useEffect(() => {
+    // Check current session on mount
+    supabase.auth.getSession().then(({ data }) => {
+      setIsAuthenticated(!!data.session);
+      setAuthChecked(true);
+    });
+    // Listen for auth state changes
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      setIsAuthenticated(!!session);
+    });
+    return () => listener.subscription.unsubscribe();
+  }, []);
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
     setIsAuthenticated(false);
   };
+
+  if (!authChecked) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-[var(--bg-page)]">
+        <span className="animate-spin w-8 h-8 border-4 border-[var(--accent)] border-t-transparent rounded-full" />
+      </div>
+    );
+  }
 
   if (!isAuthenticated) {
     return <AdminLoginScreen onSuccess={() => setIsAuthenticated(true)} />;

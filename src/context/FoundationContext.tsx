@@ -1,4 +1,11 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+  type ReactNode,
+} from 'react';
 import {
   ACTIVITIES,
   DEFAULT_SETTINGS,
@@ -6,30 +13,48 @@ import {
   type ContactSubmission,
   type SiteSettings,
 } from '../data/foundationData';
+import { supabase } from '../lib/supabase';
 
-const STORAGE_KEYS = {
-  activities: 'baytulhikmah_v2_activities',
-  settings: 'baytulhikmah_v2_settings',
-  submissions: 'baytulhikmah_v1_submissions',
-};
+// ─── Helpers: map DB row ↔ app type ─────────────────────────────────────────
 
-function readStorage<T>(key: string, fallback: T): T {
-  try {
-    const raw = window.localStorage.getItem(key);
-    if (!raw) return fallback;
-    return JSON.parse(raw) as T;
-  } catch {
-    return fallback;
-  }
+function rowToActivity(row: Record<string, unknown>): ActivityItem {
+  return {
+    id: row.id as string,
+    number: row.number as string,
+    title: row.title as string,
+    category: row.category as ActivityItem['category'],
+    summary: row.summary as string,
+    frequency: row.frequency as string,
+    iconName: row.icon_name as ActivityItem['iconName'],
+    photoHint: (row.photo_hint as string) ?? '',
+    images: (row.images as string[]) ?? [],
+    partnerHighlight: (row.partner_highlight as string | null) ?? undefined,
+  };
 }
 
-function writeStorage<T>(key: string, value: T) {
-  try {
-    window.localStorage.setItem(key, JSON.stringify(value));
-  } catch {
-    // Ignore storage quota errors gracefully
-  }
+function rowToSubmission(row: Record<string, unknown>): ContactSubmission {
+  return {
+    id: row.id as string,
+    name: row.name as string,
+    phone: (row.phone as string) ?? '',
+    topic: (row.topic as string) ?? '',
+    message: row.message as string,
+    createdAt: row.created_at as string,
+    status: row.status as 'new' | 'reviewed',
+  };
 }
+
+function rowToSettings(row: Record<string, unknown>): SiteSettings {
+  return {
+    backendApiUrl: (row.backend_api_url as string) ?? '',
+    phoneDisplay: (row.phone_display as string) ?? DEFAULT_SETTINGS.phoneDisplay,
+    email: (row.email as string) ?? DEFAULT_SETTINGS.email,
+    location: (row.location as string) ?? DEFAULT_SETTINGS.location,
+    socialLinks: (row.social_links as SiteSettings['socialLinks']) ?? DEFAULT_SETTINGS.socialLinks,
+  };
+}
+
+// ─── Context types ────────────────────────────────────────────────────────────
 
 export interface ActivityFormInput {
   title: string;
@@ -44,133 +69,205 @@ interface FoundationContextValue {
   activities: ActivityItem[];
   settings: SiteSettings;
   submissions: ContactSubmission[];
-  addActivity: (input: ActivityFormInput) => void;
-  updateActivity: (id: string, input: ActivityFormInput) => void;
-  deleteActivity: (id: string) => void;
-  resetActivities: () => void;
-  updateSettings: (next: SiteSettings) => void;
-  addSubmission: (input: Omit<ContactSubmission, 'id' | 'createdAt' | 'status'>) => void;
-  toggleSubmissionStatus: (id: string) => void;
-  deleteSubmission: (id: string) => void;
+  loading: boolean;
+  addActivity: (input: ActivityFormInput) => Promise<void>;
+  updateActivity: (id: string, input: ActivityFormInput) => Promise<void>;
+  deleteActivity: (id: string) => Promise<void>;
+  resetActivities: () => Promise<void>;
+  updateSettings: (next: SiteSettings) => Promise<void>;
+  addSubmission: (input: Omit<ContactSubmission, 'id' | 'createdAt' | 'status'>) => Promise<void>;
+  toggleSubmissionStatus: (id: string) => Promise<void>;
+  deleteSubmission: (id: string) => Promise<void>;
 }
 
 const FoundationContext = createContext<FoundationContextValue | null>(null);
 
+// ─── Provider ─────────────────────────────────────────────────────────────────
+
 export function FoundationProvider({ children }: { children: ReactNode }) {
-  const [activities, setActivities] = useState<ActivityItem[]>(() =>
-    readStorage(STORAGE_KEYS.activities, ACTIVITIES)
-  );
-  const [settings, setSettings] = useState<SiteSettings>(() =>
-    readStorage(STORAGE_KEYS.settings, DEFAULT_SETTINGS)
-  );
-  const [submissions, setSubmissions] = useState<ContactSubmission[]>(() =>
-    readStorage(STORAGE_KEYS.submissions, [])
+  const [activities, setActivities] = useState<ActivityItem[]>([]);
+  const [settings, setSettings] = useState<SiteSettings>(DEFAULT_SETTINGS);
+  const [submissions, setSubmissions] = useState<ContactSubmission[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // ── Initial load from Supabase ────────────────────────────────────────────
+  useEffect(() => {
+    async function loadAll() {
+      setLoading(true);
+      try {
+        const [{ data: actRows }, { data: setRow }, { data: subRows }] = await Promise.all([
+          supabase.from('activities').select('*').order('number'),
+          supabase.from('settings').select('*').eq('id', 1).maybeSingle(),
+          supabase.from('submissions').select('*').order('created_at', { ascending: false }),
+        ]);
+
+        if (actRows && actRows.length > 0) {
+          setActivities(actRows.map(rowToActivity));
+        } else {
+          // First run — seed default activities into DB
+          await seedActivities();
+          const { data: seeded } = await supabase.from('activities').select('*').order('number');
+          if (seeded) setActivities(seeded.map(rowToActivity));
+        }
+
+        if (setRow) {
+          setSettings(rowToSettings(setRow as Record<string, unknown>));
+        } else {
+          // First run — seed default settings
+          await supabase.from('settings').insert({
+            id: 1,
+            backend_api_url: DEFAULT_SETTINGS.backendApiUrl,
+            phone_display: DEFAULT_SETTINGS.phoneDisplay,
+            email: DEFAULT_SETTINGS.email,
+            location: DEFAULT_SETTINGS.location,
+            social_links: DEFAULT_SETTINGS.socialLinks,
+          });
+        }
+
+        if (subRows) setSubmissions(subRows.map(rowToSubmission));
+      } finally {
+        setLoading(false);
+      }
+    }
+    loadAll();
+  }, []);
+
+  // ── Seed default activities on first run ──────────────────────────────────
+  async function seedActivities() {
+    const rows = ACTIVITIES.map((a) => ({
+      id: a.id,
+      number: a.number,
+      title: a.title,
+      category: a.category,
+      summary: a.summary,
+      frequency: a.frequency,
+      icon_name: a.iconName,
+      photo_hint: a.photoHint ?? '',
+      images: a.images ?? [],
+      partner_highlight: a.partnerHighlight ?? null,
+    }));
+    await supabase.from('activities').insert(rows);
+  }
+
+  // ── Activities CRUD ───────────────────────────────────────────────────────
+  const addActivity = useCallback(async (input: ActivityFormInput) => {
+    const nextNum = String(activities.length + 1).padStart(2, '0');
+    const slug = input.title
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/(^-|-$)/g, '');
+    const id = `${slug || 'activity'}-${Date.now()}`;
+
+    const row = {
+      id,
+      number: nextNum,
+      title: input.title.trim(),
+      category: input.category,
+      summary: input.summary.trim(),
+      frequency: input.frequency.trim() || 'Ongoing Initiative',
+      icon_name: input.iconName,
+      photo_hint: input.images[0] ?? '',
+      images: input.images.slice(0, 5),
+      partner_highlight: null,
+    };
+
+    const { error } = await supabase.from('activities').insert(row);
+    if (!error) setActivities((prev) => [...prev, rowToActivity(row as Record<string, unknown>)]);
+  }, [activities.length]);
+
+  const updateActivity = useCallback(async (id: string, input: ActivityFormInput) => {
+    const updates = {
+      title: input.title.trim(),
+      category: input.category,
+      summary: input.summary.trim(),
+      frequency: input.frequency.trim() || 'Ongoing Initiative',
+      icon_name: input.iconName,
+      images: input.images.slice(0, 5),
+      photo_hint: input.images[0] ?? '',
+    };
+    const { error } = await supabase.from('activities').update(updates).eq('id', id);
+    if (!error) {
+      setActivities((prev) =>
+        prev.map((item) =>
+          item.id === id
+            ? { ...item, ...rowToActivity({ ...updates, id, number: item.number, photo_hint: updates.photo_hint, icon_name: updates.icon_name } as Record<string, unknown>) }
+            : item
+        )
+      );
+    }
+  }, []);
+
+  const deleteActivity = useCallback(async (id: string) => {
+    const { error } = await supabase.from('activities').delete().eq('id', id);
+    if (!error) {
+      setActivities((prev) =>
+        prev
+          .filter((item) => item.id !== id)
+          .map((item, idx) => ({ ...item, number: String(idx + 1).padStart(2, '0') }))
+      );
+    }
+  }, []);
+
+  const resetActivities = useCallback(async () => {
+    await supabase.from('activities').delete().neq('id', '');
+    await seedActivities();
+    const { data } = await supabase.from('activities').select('*').order('number');
+    if (data) setActivities(data.map(rowToActivity));
+  }, []);
+
+  // ── Settings ──────────────────────────────────────────────────────────────
+  const updateSettings = useCallback(async (next: SiteSettings) => {
+    const row = {
+      id: 1,
+      backend_api_url: next.backendApiUrl,
+      phone_display: next.phoneDisplay,
+      email: next.email,
+      location: next.location,
+      social_links: next.socialLinks,
+    };
+    const { error } = await supabase.from('settings').upsert(row);
+    if (!error) setSettings(next);
+  }, []);
+
+  // ── Submissions ───────────────────────────────────────────────────────────
+  const addSubmission = useCallback(
+    async (input: Omit<ContactSubmission, 'id' | 'createdAt' | 'status'>) => {
+      const id = `sub-${Date.now()}`;
+      const row = {
+        id,
+        name: input.name.trim(),
+        phone: input.phone.trim(),
+        topic: input.topic,
+        message: input.message.trim(),
+        status: 'new' as const,
+      };
+      const { error } = await supabase.from('submissions').insert(row);
+      if (!error) {
+        setSubmissions((prev) => [
+          { ...row, createdAt: new Date().toISOString() },
+          ...prev,
+        ]);
+      }
+    },
+    []
   );
 
-  useEffect(() => {
-    writeStorage(STORAGE_KEYS.activities, activities);
-  }, [activities]);
-
-  useEffect(() => {
-    writeStorage(STORAGE_KEYS.settings, settings);
-  }, [settings]);
-
-  useEffect(() => {
-    writeStorage(STORAGE_KEYS.submissions, submissions);
+  const toggleSubmissionStatus = useCallback(async (id: string) => {
+    const sub = submissions.find((s) => s.id === id);
+    if (!sub) return;
+    const next = sub.status === 'new' ? 'reviewed' : 'new';
+    const { error } = await supabase.from('submissions').update({ status: next }).eq('id', id);
+    if (!error) {
+      setSubmissions((prev) =>
+        prev.map((s) => (s.id === id ? { ...s, status: next } : s))
+      );
+    }
   }, [submissions]);
 
-  const addActivity = (input: ActivityFormInput) => {
-    setActivities((prev) => {
-      const nextNum = String(prev.length + 1).padStart(2, '0');
-      const slug = input.title
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, '-')
-        .replace(/(^-|-$)/g, '');
-      const newItem: ActivityItem = {
-        id: `${slug || 'activity'}-${Date.now()}`,
-        number: nextNum,
-        title: input.title.trim(),
-        category: input.category,
-        summary: input.summary.trim(),
-        frequency: input.frequency.trim() || 'Ongoing Initiative',
-        iconName: input.iconName,
-        photoHint: input.images[0] || '',
-        images: input.images.slice(0, 5),
-      };
-      return [...prev, newItem];
-    });
-  };
-
-  const updateActivity = (id: string, input: ActivityFormInput) => {
-    setActivities((prev) =>
-      prev.map((item) =>
-        item.id === id
-          ? {
-              ...item,
-              title: input.title.trim(),
-              category: input.category,
-              summary: input.summary.trim(),
-              frequency: input.frequency.trim() || item.frequency,
-              iconName: input.iconName,
-              images: input.images.slice(0, 5),
-              photoHint: input.images[0] || item.photoHint,
-            }
-          : item
-      )
-    );
-  };
-
-  const deleteActivity = (id: string) => {
-    setActivities((prev) =>
-      prev
-        .filter((item) => item.id !== id)
-        .map((item, idx) => ({ ...item, number: String(idx + 1).padStart(2, '0') }))
-    );
-  };
-
-  const resetActivities = () => {
-    setActivities(ACTIVITIES);
-  };
-
-  const updateSettings = (next: SiteSettings) => {
-    setSettings(next);
-  };
-
-  const addSubmission = (input: Omit<ContactSubmission, 'id' | 'createdAt' | 'status'>) => {
-    const newEntry: ContactSubmission = {
-      id: `sub-${Date.now()}`,
-      name: input.name.trim(),
-      phone: input.phone.trim(),
-      topic: input.topic,
-      message: input.message.trim(),
-      createdAt: new Date().toISOString(),
-      status: 'new',
-    };
-    setSubmissions((prev) => [newEntry, ...prev]);
-
-    if (settings.backendApiUrl.trim()) {
-      const endpoint = `${settings.backendApiUrl.replace(/\/$/, '')}/contact`;
-      fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newEntry),
-      }).catch(() => {
-        // Silently keep local copy if backend endpoint isn't wired yet
-      });
-    }
-  };
-
-  const toggleSubmissionStatus = (id: string) => {
-    setSubmissions((prev) =>
-      prev.map((s) =>
-        s.id === id ? { ...s, status: s.status === 'new' ? 'reviewed' : 'new' } : s
-      )
-    );
-  };
-
-  const deleteSubmission = (id: string) => {
-    setSubmissions((prev) => prev.filter((s) => s.id !== id));
-  };
+  const deleteSubmission = useCallback(async (id: string) => {
+    const { error } = await supabase.from('submissions').delete().eq('id', id);
+    if (!error) setSubmissions((prev) => prev.filter((s) => s.id !== id));
+  }, []);
 
   return (
     <FoundationContext.Provider
@@ -178,6 +275,7 @@ export function FoundationProvider({ children }: { children: ReactNode }) {
         activities,
         settings,
         submissions,
+        loading,
         addActivity,
         updateActivity,
         deleteActivity,
@@ -195,8 +293,6 @@ export function FoundationProvider({ children }: { children: ReactNode }) {
 
 export function useFoundation() {
   const ctx = useContext(FoundationContext);
-  if (!ctx) {
-    throw new Error('useFoundation must be used within FoundationProvider');
-  }
+  if (!ctx) throw new Error('useFoundation must be used within FoundationProvider');
   return ctx;
 }
