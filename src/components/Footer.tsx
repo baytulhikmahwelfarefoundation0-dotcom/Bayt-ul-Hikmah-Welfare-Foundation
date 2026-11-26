@@ -7,7 +7,7 @@ import { SocialIcon } from './SocialIcon';
 
 export function Footer() {
   const { settings } = useFoundation();
-  const activeSocials = settings.socialLinks.filter((s) => s.enabled && s.url.trim());
+  const activeSocials = settings.socialLinks.filter((s) => s.url.trim());
 
   return (
     <footer className="relative overflow-hidden border-t border-[#0B3B75]/15 bg-gradient-to-b from-[#082A56] to-[#061F40] text-white">

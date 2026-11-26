@@ -283,6 +283,8 @@ function AdminDashboard() {
   const [newSocialLabel, setNewSocialLabel] = useState('');
   const [newSocialUrl, setNewSocialUrl] = useState('');
   const [settingsSaved, setSettingsSaved] = useState(false);
+  const [isSavingSettings, setIsSavingSettings] = useState(false);
+  const [settingsError, setSettingsError] = useState('');
 
   // Submissions filter
   const [submissionFilter, setSubmissionFilter] = useState<'all' | 'new' | 'reviewed'>('all');
@@ -418,11 +420,20 @@ function AdminDashboard() {
     }));
   };
 
-  const handleSaveSettings = (e: FormEvent) => {
+  const handleSaveSettings = async (e: FormEvent) => {
     e.preventDefault();
-    updateSettings(settingsDraft);
-    setSettingsSaved(true);
-    window.setTimeout(() => setSettingsSaved(false), 2500);
+    setIsSavingSettings(true);
+    setSettingsError('');
+    try {
+      await updateSettings(settingsDraft);
+      setSettingsSaved(true);
+      window.setTimeout(() => setSettingsSaved(false), 2500);
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'Failed to save settings';
+      setSettingsError(msg);
+    } finally {
+      setIsSavingSettings(false);
+    }
   };
 
   const filteredSubmissions =
@@ -1131,19 +1142,35 @@ function AdminDashboard() {
               </div>
             </div>
 
-            <div className="flex items-center gap-4">
+            <div className="flex flex-wrap items-center gap-4">
               <button
                 type="submit"
-                className="inline-flex items-center gap-2 rounded-xl bg-[#0B3B75] px-6 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#1456A8]"
+                disabled={isSavingSettings}
+                className="inline-flex items-center gap-2 rounded-xl bg-[#0B3B75] px-6 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-[#1456A8] disabled:opacity-60"
               >
-                <Save className="h-4 w-4" />
-                <span>Save Settings</span>
+                {isSavingSettings ? (
+                  <>
+                    <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    <span>Saving…</span>
+                  </>
+                ) : (
+                  <>
+                    <Save className="h-4 w-4" />
+                    <span>Save Settings</span>
+                  </>
+                )}
               </button>
 
               {settingsSaved && (
                 <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-700">
                   <CheckCircle2 className="h-4 w-4" />
-                  Settings updated!
+                  Settings saved to database!
+                </span>
+              )}
+
+              {settingsError && (
+                <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-red-600">
+                  {settingsError}
                 </span>
               )}
             </div>

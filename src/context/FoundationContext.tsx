@@ -85,77 +85,60 @@ const FoundationContext = createContext<FoundationContextValue | null>(null);
 // ─── Provider ─────────────────────────────────────────────────────────────────
 
 export function FoundationProvider({ children }: { children: ReactNode }) {
-  const [activities, setActivities] = useState<ActivityItem[]>([]);
-  const [settings, setSettings] = useState<SiteSettings>(DEFAULT_SETTINGS);
+  const [activities, setActivities] = useState<ActivityItem[]>(ACTIVITIES);
+  const [settings, setSettings]     = useState<SiteSettings>(DEFAULT_SETTINGS);
   const [submissions, setSubmissions] = useState<ContactSubmission[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading]        = useState(true);
 
-  // ── Initial load from Supabase ────────────────────────────────────────────
-  useEffect(() => {
-    async function loadAll() {
-      setLoading(true);
-      try {
-        const [{ data: actRows }, { data: setRow }, { data: subRows }] = await Promise.all([
-          supabase.from('activities').select('*').order('number'),
-          supabase.from('settings').select('*').eq('id', 1).maybeSingle(),
-          supabase.from('submissions').select('*').order('created_at', { ascending: false }),
-        ]);
+  // ── Load from Supabase (re-runs on auth change) ────────────────────────────
+  const loadAll = useCallback(async () => {
+    setLoading(true);
+    try {
+      // Activities + settings are public-readable
+      const [{ data: actRows }, { data: setRow }] = await Promise.all([
+        supabase.from('activities').select('*').order('number'),
+        supabase.from('settings').select('*').eq('id', 1).maybeSingle(),
+      ]);
 
-        if (actRows && actRows.length > 0) {
-          setActivities(actRows.map(rowToActivity));
-        } else {
-          // First run — seed default activities into DB
-          await seedActivities();
-          const { data: seeded } = await supabase.from('activities').select('*').order('number');
-          if (seeded) setActivities(seeded.map(rowToActivity));
-        }
-
-        if (setRow) {
-          setSettings(rowToSettings(setRow as Record<string, unknown>));
-        } else {
-          // First run — seed default settings
-          await supabase.from('settings').insert({
-            id: 1,
-            backend_api_url: DEFAULT_SETTINGS.backendApiUrl,
-            phone_display: DEFAULT_SETTINGS.phoneDisplay,
-            email: DEFAULT_SETTINGS.email,
-            location: DEFAULT_SETTINGS.location,
-            social_links: DEFAULT_SETTINGS.socialLinks,
-          });
-        }
-
-        if (subRows) setSubmissions(subRows.map(rowToSubmission));
-      } finally {
-        setLoading(false);
+      if (actRows && actRows.length > 0) {
+        setActivities(actRows.map(rowToActivity));
       }
+      // else keep the in-code fallback (ACTIVITIES) already set as initial state
+
+      if (setRow) {
+        setSettings(rowToSettings(setRow as Record<string, unknown>));
+      }
+
+      // Submissions are admin-only — only load if authenticated
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        const { data: subRows } = await supabase
+          .from('submissions')
+          .select('*')
+          .order('created_at', { ascending: false });
+        if (subRows) setSubmissions(subRows.map(rowToSubmission));
+      }
+    } finally {
+      setLoading(false);
     }
-    loadAll();
   }, []);
 
-  // ── Seed default activities on first run ──────────────────────────────────
-  async function seedActivities() {
-    const rows = ACTIVITIES.map((a) => ({
-      id: a.id,
-      number: a.number,
-      title: a.title,
-      category: a.category,
-      summary: a.summary,
-      frequency: a.frequency,
-      icon_name: a.iconName,
-      photo_hint: a.photoHint ?? '',
-      images: a.images ?? [],
-      partner_highlight: a.partnerHighlight ?? null,
-    }));
-    await supabase.from('activities').insert(rows);
-  }
+  useEffect(() => {
+    loadAll();
+    // Re-load when auth state changes (e.g. admin logs in → fetch submissions)
+    const { data: listener } = supabase.auth.onAuthStateChange(() => {
+      loadAll();
+    });
+    return () => listener.subscription.unsubscribe();
+  }, [loadAll]);
 
   // ── Activities CRUD ───────────────────────────────────────────────────────
   const addActivity = useCallback(async (input: ActivityFormInput) => {
-    const nextNum = String(activities.length + 1).padStart(2, '0');
-    const slug = input.title
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/(^-|-$)/g, '');
+    const { data: existing } = await supabase.from('activities').select('number').order('number', { ascending: false }).limit(1);
+    const nextNum = existing && existing.length > 0
+      ? String(parseInt(existing[0].number) + 1).padStart(2, '0')
+      : String(activities.length + 1).padStart(2, '0');
+    const slug = input.title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
     const id = `${slug || 'activity'}-${Date.now()}`;
 
     const row = {
@@ -168,11 +151,13 @@ export function FoundationProvider({ children }: { children: ReactNode }) {
       icon_name: input.iconName,
       photo_hint: input.images[0] ?? '',
       images: input.images.slice(0, 5),
-      partner_highlight: null,
+      partner_highlight: null as string | null,
     };
 
     const { error } = await supabase.from('activities').insert(row);
-    if (!error) setActivities((prev) => [...prev, rowToActivity(row as Record<string, unknown>)]);
+    if (!error) {
+      setActivities((prev) => [...prev, rowToActivity(row as Record<string, unknown>)]);
+    }
   }, [activities.length]);
 
   const updateActivity = useCallback(async (id: string, input: ActivityFormInput) => {
@@ -190,7 +175,16 @@ export function FoundationProvider({ children }: { children: ReactNode }) {
       setActivities((prev) =>
         prev.map((item) =>
           item.id === id
-            ? { ...item, ...rowToActivity({ ...updates, id, number: item.number, photo_hint: updates.photo_hint, icon_name: updates.icon_name } as Record<string, unknown>) }
+            ? {
+                ...item,
+                title: updates.title,
+                category: updates.category as ActivityItem['category'],
+                summary: updates.summary,
+                frequency: updates.frequency,
+                iconName: updates.icon_name as ActivityItem['iconName'],
+                images: updates.images,
+                photoHint: updates.photo_hint,
+              }
             : item
         )
       );
@@ -210,9 +204,14 @@ export function FoundationProvider({ children }: { children: ReactNode }) {
 
   const resetActivities = useCallback(async () => {
     await supabase.from('activities').delete().neq('id', '');
-    await seedActivities();
-    const { data } = await supabase.from('activities').select('*').order('number');
-    if (data) setActivities(data.map(rowToActivity));
+    const rows = ACTIVITIES.map((a) => ({
+      id: a.id, number: a.number, title: a.title, category: a.category,
+      summary: a.summary, frequency: a.frequency, icon_name: a.iconName,
+      photo_hint: a.photoHint ?? '', images: a.images ?? [],
+      partner_highlight: a.partnerHighlight ?? null,
+    }));
+    await supabase.from('activities').insert(rows);
+    setActivities(ACTIVITIES);
   }, []);
 
   // ── Settings ──────────────────────────────────────────────────────────────
@@ -225,8 +224,12 @@ export function FoundationProvider({ children }: { children: ReactNode }) {
       location: next.location,
       social_links: next.socialLinks,
     };
-    const { error } = await supabase.from('settings').upsert(row);
-    if (!error) setSettings(next);
+    const { error } = await supabase.from('settings').upsert(row, { onConflict: 'id' });
+    if (error) {
+      console.error('Settings save error:', error);
+      throw error;
+    }
+    setSettings(next);
   }, []);
 
   // ── Submissions ───────────────────────────────────────────────────────────
@@ -243,10 +246,7 @@ export function FoundationProvider({ children }: { children: ReactNode }) {
       };
       const { error } = await supabase.from('submissions').insert(row);
       if (!error) {
-        setSubmissions((prev) => [
-          { ...row, createdAt: new Date().toISOString() },
-          ...prev,
-        ]);
+        setSubmissions((prev) => [{ ...row, createdAt: new Date().toISOString() }, ...prev]);
       }
     },
     []
@@ -258,9 +258,7 @@ export function FoundationProvider({ children }: { children: ReactNode }) {
     const next = sub.status === 'new' ? 'reviewed' : 'new';
     const { error } = await supabase.from('submissions').update({ status: next }).eq('id', id);
     if (!error) {
-      setSubmissions((prev) =>
-        prev.map((s) => (s.id === id ? { ...s, status: next } : s))
-      );
+      setSubmissions((prev) => prev.map((s) => (s.id === id ? { ...s, status: next } : s)));
     }
   }, [submissions]);
 
@@ -272,18 +270,9 @@ export function FoundationProvider({ children }: { children: ReactNode }) {
   return (
     <FoundationContext.Provider
       value={{
-        activities,
-        settings,
-        submissions,
-        loading,
-        addActivity,
-        updateActivity,
-        deleteActivity,
-        resetActivities,
-        updateSettings,
-        addSubmission,
-        toggleSubmissionStatus,
-        deleteSubmission,
+        activities, settings, submissions, loading,
+        addActivity, updateActivity, deleteActivity, resetActivities,
+        updateSettings, addSubmission, toggleSubmissionStatus, deleteSubmission,
       }}
     >
       {children}
