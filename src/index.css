@@ -1,0 +1,56 @@
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Plus Jakarta Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Cormorant Garamond", ui-serif, Georgia, serif;
+}
+
+:root {
+  --bg-page: #FFFFFF;
+  --bg-surface: #FFFFFF;
+  --bg-surface-alt: #F5F9FE;
+  --bg-nav: rgba(255, 255, 255, 0.95);
+  --bg-top-bar: #0B3B75;
+  --bg-pill: #EBF3FC;
+  --bg-hero-from: #F2F7FD;
+  --text-heading: #0B3B75;
+  --text-strong: #0F1E36;
+  --text-accent: #1456A8;
+  --text-body: #465872;
+  --text-muted: #516887;
+  --border-subtle: rgba(11, 59, 117, 0.12);
+  --border-strong: rgba(11, 59, 117, 0.22);
+  --btn-primary-bg: #0B3B75;
+  --btn-primary-hover: #1456A8;
+  --btn-primary-text: #FFFFFF;
+  --hero-card-bg: linear-gradient(135deg, #082B59 0%, #0B3B75 55%, #134E99 100%);
+  --grid-line: rgba(20, 86, 168, 0.05);
+  --dot-color: rgba(20, 86, 168, 0.08);
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    font-family: var(--font-sans);
+    background-color: var(--bg-page);
+    color: var(--text-body);
+  }
+
+  body {
+    overflow-x: hidden;
+    background-color: var(--bg-page);
+    color: var(--text-body);
+  }
+}
+
+.arch-pattern {
+  background-image: radial-gradient(circle at 1px 1px, var(--dot-color) 1px, transparent 0);
+  background-size: 24px 24px;
+}
+
+.hero-grid {
+  background-image:
+    linear-gradient(to right, var(--grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--grid-line) 1px, transparent 1px);
+  background-size: 48px 48px;
+}
