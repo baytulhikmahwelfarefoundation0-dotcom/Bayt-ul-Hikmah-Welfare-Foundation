@@ -217,27 +217,20 @@ export function AdminPage() {
   const [authChecked, setAuthChecked] = useState(false);
 
   useEffect(() => {
-    // Check current session on mount
     supabase.auth.getSession().then(({ data }) => {
       setIsAuthenticated(!!data.session);
       setAuthChecked(true);
     });
-    // Listen for auth state changes
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       setIsAuthenticated(!!session);
     });
     return () => listener.subscription.unsubscribe();
   }, []);
 
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    setIsAuthenticated(false);
-  };
-
   if (!authChecked) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-[var(--bg-page)]">
-        <span className="animate-spin w-8 h-8 border-4 border-[var(--accent)] border-t-transparent rounded-full" />
+      <div className="min-h-screen flex items-center justify-center bg-[#F2F7FD]">
+        <span className="animate-spin w-8 h-8 border-4 border-[#0B3B75] border-t-transparent rounded-full" />
       </div>
     );
   }
@@ -245,6 +238,15 @@ export function AdminPage() {
   if (!isAuthenticated) {
     return <AdminLoginScreen onSuccess={() => setIsAuthenticated(true)} />;
   }
+
+  return <AdminDashboard />;
+}
+
+// ─── Full dashboard (all hooks unconditionally called) ────────────────────────
+function AdminDashboard() {
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+  };
 
   // ─── Dashboard ──────────────────────────────────────────────────────────────
   const {
