@@ -5,6 +5,8 @@ import {
   CheckCircle2,
   Database,
   Edit3,
+  Eye,
+  EyeOff,
   ImagePlus,
   Inbox,
   LayoutGrid,
@@ -93,6 +95,7 @@ function compressImageFile(file: File): Promise<string> {
 function AdminLoginScreen({ onSuccess }: { onSuccess: () => void }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -129,6 +132,7 @@ function AdminLoginScreen({ onSuccess }: { onSuccess: () => void }) {
           onSubmit={handleLogin}
           className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8 space-y-5"
         >
+          {/* Email */}
           <div>
             <label className="block text-sm font-semibold text-[var(--text-body)] mb-1.5">
               Email
@@ -144,38 +148,57 @@ function AdminLoginScreen({ onSuccess }: { onSuccess: () => void }) {
             />
           </div>
 
+          {/* Password with eye toggle */}
           <div>
             <label className="block text-sm font-semibold text-[var(--text-body)] mb-1.5">
               Password
             </label>
-            <input
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              autoComplete="current-password"
-              placeholder="Enter password"
-              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-transparent transition"
-            />
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                required
+                autoComplete="current-password"
+                placeholder="Enter password"
+                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 pr-11 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-transparent transition"
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword((v) => !v)}
+                className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-400 hover:text-[var(--accent)] transition"
+                tabIndex={-1}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
+              >
+                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
 
+          {/* Error */}
           {error && (
             <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
               {error}
             </p>
           )}
 
+          {/* Submit */}
           <button
             type="submit"
             disabled={loading}
-            className="w-full flex items-center justify-center gap-2 bg-[var(--accent)] text-white font-semibold py-2.5 rounded-xl hover:bg-[var(--accent-hover)] transition disabled:opacity-60 disabled:cursor-not-allowed"
+            className="w-full flex items-center justify-center gap-2 bg-[var(--accent)] text-white font-semibold py-3 rounded-xl hover:bg-[var(--accent-hover)] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {loading ? (
-              <span className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+              <>
+                <span className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                <span>Signing in…</span>
+              </>
             ) : (
-              <LogIn className="w-4 h-4" />
+              <>
+                <LogIn className="w-4 h-4 shrink-0" />
+                <span>Sign In</span>
+              </>
             )}
-            {loading ? 'Signing in…' : 'Sign In'}
           </button>
 
           <p className="text-center text-xs text-[var(--text-muted)]">
