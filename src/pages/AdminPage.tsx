@@ -9,10 +9,13 @@ import {
   Inbox,
   LayoutGrid,
   Link2,
+  LogIn,
+  LogOut,
   Plus,
   RotateCcw,
   Save,
   Settings,
+  ShieldCheck,
   Trash2,
   X,
 } from 'lucide-react';
@@ -85,7 +88,127 @@ function compressImageFile(file: File): Promise<string> {
   });
 }
 
+// ─── Admin credentials (change here to update the password) ──────────────────
+const ADMIN_USERNAME = 'admin';
+const ADMIN_PASSWORD = 'baytulhikmah@2024';
+const SESSION_KEY = 'bth_admin_auth';
+
+// ─── Login screen component ───────────────────────────────────────────────────
+function AdminLoginScreen({ onSuccess }: { onSuccess: () => void }) {
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  const handleLogin = (e: FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    // Simulate a tiny delay so it feels intentional
+    setTimeout(() => {
+      if (username.trim() === ADMIN_USERNAME && password === ADMIN_PASSWORD) {
+        sessionStorage.setItem(SESSION_KEY, '1');
+        onSuccess();
+      } else {
+        setError('Invalid username or password. Please try again.');
+      }
+      setLoading(false);
+    }, 400);
+  };
+
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-[var(--bg-page)] px-4">
+      <div className="w-full max-w-sm">
+        {/* Logo / branding */}
+        <div className="text-center mb-8">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[var(--accent)] mb-4 shadow-lg">
+            <ShieldCheck className="w-9 h-9 text-white" />
+          </div>
+          <h1 className="text-2xl font-bold text-[var(--text-heading)]">Admin Panel</h1>
+          <p className="text-sm text-[var(--text-muted)] mt-1">Bayt-ul-Hikmah Welfare Foundation</p>
+        </div>
+
+        {/* Card */}
+        <form
+          onSubmit={handleLogin}
+          className="bg-white rounded-2xl shadow-xl border border-gray-100 p-8 space-y-5"
+        >
+          <div>
+            <label className="block text-sm font-semibold text-[var(--text-body)] mb-1.5">
+              Username
+            </label>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              required
+              autoComplete="username"
+              placeholder="Enter username"
+              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-transparent transition"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-semibold text-[var(--text-body)] mb-1.5">
+              Password
+            </label>
+            <input
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              required
+              autoComplete="current-password"
+              placeholder="Enter password"
+              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-transparent transition"
+            />
+          </div>
+
+          {error && (
+            <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+              {error}
+            </p>
+          )}
+
+          <button
+            type="submit"
+            disabled={loading}
+            className="w-full flex items-center justify-center gap-2 bg-[var(--accent)] text-white font-semibold py-2.5 rounded-xl hover:bg-[var(--accent-hover)] transition disabled:opacity-60 disabled:cursor-not-allowed"
+          >
+            {loading ? (
+              <span className="animate-spin w-4 h-4 border-2 border-white border-t-transparent rounded-full" />
+            ) : (
+              <LogIn className="w-4 h-4" />
+            )}
+            {loading ? 'Signing in…' : 'Sign In'}
+          </button>
+
+          <p className="text-center text-xs text-[var(--text-muted)]">
+            <Link to="/" className="underline hover:text-[var(--accent)]">
+              ← Back to public site
+            </Link>
+          </p>
+        </form>
+      </div>
+    </div>
+  );
+}
+
 export function AdminPage() {
+  // ─── Auth gate ──────────────────────────────────────────────────────────────
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean>(
+    () => sessionStorage.getItem(SESSION_KEY) === '1'
+  );
+
+  const handleLogout = () => {
+    sessionStorage.removeItem(SESSION_KEY);
+    setIsAuthenticated(false);
+  };
+
+  if (!isAuthenticated) {
+    return <AdminLoginScreen onSuccess={() => setIsAuthenticated(true)} />;
+  }
+
+  // ─── Dashboard ──────────────────────────────────────────────────────────────
   const {
     activities,
     settings,
@@ -271,13 +394,23 @@ export function AdminPage() {
             </h1>
           </div>
 
-          <Link
-            to="/"
-            className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-[#0B3B75] shadow-sm transition hover:bg-blue-50"
-          >
-            <ArrowLeft className="h-4 w-4" />
-            <span>Back to Public Site</span>
-          </Link>
+          <div className="flex items-center gap-2 flex-shrink-0">
+            <Link
+              to="/"
+              className="inline-flex items-center gap-2 rounded-xl bg-white px-4 py-2.5 text-sm font-bold text-[#0B3B75] shadow-sm transition hover:bg-blue-50"
+            >
+              <ArrowLeft className="h-4 w-4" />
+              <span className="hidden sm:inline">Back to Public Site</span>
+            </Link>
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="inline-flex items-center gap-2 rounded-xl bg-red-500 px-4 py-2.5 text-sm font-bold text-white shadow-sm transition hover:bg-red-600"
+            >
+              <LogOut className="h-4 w-4" />
+              <span className="hidden sm:inline">Logout</span>
+            </button>
+          </div>
         </div>
 
         {/* Navigation Tabs */}
