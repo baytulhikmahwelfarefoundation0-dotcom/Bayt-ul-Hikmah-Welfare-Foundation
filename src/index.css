@@ -26,6 +26,9 @@
   --hero-card-bg: linear-gradient(135deg, #082B59 0%, #0B3B75 55%, #134E99 100%);
   --grid-line: rgba(20, 86, 168, 0.05);
   --dot-color: rgba(20, 86, 168, 0.08);
+  /* Shorthand accent tokens used by admin panel */
+  --accent: #0B3B75;
+  --accent-hover: #1456A8;
 }
 
 @layer base {

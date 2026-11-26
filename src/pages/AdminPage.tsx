@@ -17,7 +17,6 @@ import {
   RotateCcw,
   Save,
   Settings,
-  ShieldCheck,
   Trash2,
   X,
 } from 'lucide-react';
@@ -116,15 +115,15 @@ function AdminLoginScreen({ onSuccess }: { onSuccess: () => void }) {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[var(--bg-page)] px-4">
+    <div className="min-h-screen flex items-center justify-center bg-[#F2F7FD] px-4">
       <div className="w-full max-w-sm">
         {/* Logo / branding */}
         <div className="text-center mb-8">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-[var(--accent)] mb-4 shadow-lg">
-            <ShieldCheck className="w-9 h-9 text-white" />
+          <div className="inline-flex items-center justify-center w-20 h-20 rounded-2xl bg-white shadow-lg mb-4 overflow-hidden border border-gray-100">
+            <img src="/logo.jpg" alt="Bayt-ul-Hikmah" className="w-full h-full object-cover" />
           </div>
-          <h1 className="text-2xl font-bold text-[var(--text-heading)]">Admin Panel</h1>
-          <p className="text-sm text-[var(--text-muted)] mt-1">Bayt-ul-Hikmah Welfare Foundation</p>
+          <h1 className="text-2xl font-bold text-[#0B3B75]">Admin Panel</h1>
+          <p className="text-sm text-[#516887] mt-1">Bayt-ul-Hikmah Welfare Foundation</p>
         </div>
 
         {/* Card */}
@@ -134,7 +133,7 @@ function AdminLoginScreen({ onSuccess }: { onSuccess: () => void }) {
         >
           {/* Email */}
           <div>
-            <label className="block text-sm font-semibold text-[var(--text-body)] mb-1.5">
+            <label className="block text-sm font-semibold text-[#465872] mb-1.5">
               Email
             </label>
             <input
@@ -144,13 +143,13 @@ function AdminLoginScreen({ onSuccess }: { onSuccess: () => void }) {
               required
               autoComplete="email"
               placeholder="admin@example.com"
-              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-transparent transition"
+              className="w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B3B75] focus:border-transparent transition"
             />
           </div>
 
           {/* Password with eye toggle */}
           <div>
-            <label className="block text-sm font-semibold text-[var(--text-body)] mb-1.5">
+            <label className="block text-sm font-semibold text-[#465872] mb-1.5">
               Password
             </label>
             <div className="relative">
@@ -161,12 +160,12 @@ function AdminLoginScreen({ onSuccess }: { onSuccess: () => void }) {
                 required
                 autoComplete="current-password"
                 placeholder="Enter password"
-                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 pr-11 text-sm focus:outline-none focus:ring-2 focus:ring-[var(--accent)] focus:border-transparent transition"
+                className="w-full border border-gray-200 rounded-xl px-4 py-2.5 pr-11 text-sm focus:outline-none focus:ring-2 focus:ring-[#0B3B75] focus:border-transparent transition"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword((v) => !v)}
-                className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-400 hover:text-[var(--accent)] transition"
+                className="absolute inset-y-0 right-0 flex items-center px-3 text-gray-400 hover:text-[#0B3B75] transition"
                 tabIndex={-1}
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
               >
@@ -186,7 +185,7 @@ function AdminLoginScreen({ onSuccess }: { onSuccess: () => void }) {
           <button
             type="submit"
             disabled={loading}
-            className="w-full flex items-center justify-center gap-2 bg-[var(--accent)] text-white font-semibold py-3 rounded-xl hover:bg-[var(--accent-hover)] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
+            className="w-full flex items-center justify-center gap-2 bg-[#0B3B75] text-white font-semibold py-3 rounded-xl hover:bg-[#1456A8] transition-colors disabled:opacity-60 disabled:cursor-not-allowed"
           >
             {loading ? (
               <>
@@ -201,8 +200,8 @@ function AdminLoginScreen({ onSuccess }: { onSuccess: () => void }) {
             )}
           </button>
 
-          <p className="text-center text-xs text-[var(--text-muted)]">
-            <Link to="/" className="underline hover:text-[var(--accent)]">
+          <p className="text-center text-xs text-[#516887]">
+            <Link to="/" className="underline hover:text-[#0B3B75]">
               ← Back to public site
             </Link>
           </p>
