@@ -106,7 +106,7 @@ export function ContactPage() {
                   </a>
 
                   {settings.socialLinks
-                    .filter((s) => s.enabled && s.url.trim() && s.icon !== 'whatsapp')
+                    .filter((s) => s.url.trim() && s.icon !== 'whatsapp')
                     .map((social) => (
                       <a
                         key={social.id}

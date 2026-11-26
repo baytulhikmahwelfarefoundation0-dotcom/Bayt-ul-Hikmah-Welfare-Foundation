@@ -273,6 +273,11 @@ function AdminDashboard() {
 
   // Settings form state
   const [settingsDraft, setSettingsDraft] = useState(settings);
+
+  // Keep draft in sync when settings load from Supabase
+  useEffect(() => {
+    setSettingsDraft(settings);
+  }, [settings]);
   const [newSocialPlatform, setNewSocialPlatform] = useState('');
   const [newSocialIcon, setNewSocialIcon] = useState<SocialIconKey>('globe');
   const [newSocialLabel, setNewSocialLabel] = useState('');
@@ -375,9 +380,15 @@ function AdminDashboard() {
   ) => {
     setSettingsDraft((prev) => ({
       ...prev,
-      socialLinks: prev.socialLinks.map((item) =>
-        item.id === id ? { ...item, [field]: value } : item
-      ),
+      socialLinks: prev.socialLinks.map((item) => {
+        if (item.id !== id) return item;
+        const updated = { ...item, [field]: value };
+        // Auto-enable when a URL is entered
+        if (field === 'url' && typeof value === 'string' && value.trim()) {
+          updated.enabled = true;
+        }
+        return updated;
+      }),
     }));
   };
 
